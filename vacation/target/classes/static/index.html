@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>员工假期管理系统</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .tabs { display: flex; margin-bottom: 20px; border-bottom: 1px solid #ccc; }
+        .tab { padding: 10px 20px; cursor: pointer; border: none; background: none; font-size: 16px; }
+        .tab.active { border-bottom: 3px solid #007bff; color: #007bff; font-weight: bold; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background-color: #f2f2f2; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; }
+        input, select, button { padding: 8px; width: 100%; max-width: 300px; }
+        button { background-color: #007bff; color: white; border: none; cursor: pointer; }
+        button:hover { background-color: #0056b3; }
+        .actions { display: flex; gap: 10px; }
+        .status-pending { color: orange; }
+        .status-approved { color: green; }
+        .status-rejected { color: red; }
+        .status-active { color: blue; }
+    </style>
+</head>
+<body>
+    <h1>员工假期管理系统</h1>
+    <div class="tabs">
+        <button class="tab active" data-tab="employees">员工管理</button>
+        <button class="tab" data-tab="vacations">假期管理</button>
+        <button class="tab" data-tab="requests">假期申请</button>
+    </div>
+
+    <!-- 员工管理 -->
+    <div class="tab-content active" id="employees">
+        <h2>员工列表</h2>
+        <table id="employees-table">
+            <thead><tr><th>ID</th><th>姓名</th><th>级别</th><th>总假期</th><th>剩余假期</th><th>操作</th></tr></thead>
+            <tbody></tbody>
+        </table>
+
+        <h3>添加/编辑员工</h3>
+        <form id="employee-form">
+            <input type="hidden" id="employee-id">
+            <div class="form-group">
+                <label for="employee-name">姓名</label>
+                <input type="text" id="employee-name" required>
+            </div>
+            <div class="form-group">
+                <label for="employee-level">级别</label>
+                <input type="number" id="employee-level" required>
+            </div>
+            <button type="submit">保存</button>
+            <button type="button" id="cancel-employee">取消</button>
+        </form>
+
+        <h3>添加假期</h3>
+        <form id="add-vacation-form">
+            <div class="form-group">
+                <label for="add-vacation-employee">员工</label>
+                <select id="add-vacation-employee" required></select>
+            </div>
+            <div class="form-group">
+                <label for="vacation-days">假期天数</label>
+                <input type="number" id="vacation-days" min="1" required>
+            </div>
+            <button type="submit">添加</button>
+        </form>
+    </div>
+
+    <!-- 假期管理 -->
+    <div class="tab-content" id="vacations">
+        <h2>假期列表</h2>
+        <table id="vacations-table">
+            <thead><tr><th>ID</th><th>员工</th><th>类型</th><th>总天数</th><th>已用天数</th><th>状态</th></tr></thead>
+            <tbody></tbody>
+        </table>
+
+        <h3>添加假期类型</h3>
+        <form id="vacation-form">
+            <div class="form-group">
+                <label for="vacation-employee">员工</label>
+                <select id="vacation-employee" required></select>
+            </div>
+            <div class="form-group">
+                <label for="vacation-type">假期类型</label>
+                <input type="text" id="vacation-type" required placeholder="例如：年假、病假">
+            </div>
+            <div class="form-group">
+                <label for="total-days">总天数</label>
+                <input type="number" id="total-days" min="1" required>
+            </div>
+            <button type="submit">添加</button>
+        </form>
+    </div>
+
+    <!-- 假期申请 -->
+    <div class="tab-content" id="requests">
+        <h2>申请列表</h2>
+        <table id="requests-table">
+            <thead><tr><th>ID</th><th>员工</th><th>类型</th><th>开始日期</th><th>结束日期</th><th>状态</th><th>操作</th></tr></thead>
+            <tbody></tbody>
+        </table>
+
+        <h3>提交假期申请</h3>
+        <form id="request-form">
+            <div class="form-group">
+                <label for="request-employee">员工</label>
+                <select id="request-employee" required></select>
+            </div>
+            <div class="form-group">
+                <label for="request-type">假期类型</label>
+                <select id="request-type" required></select>
+            </div>
+            <div class="form-group">
+                <label for="start-date">开始日期</label>
+                <input type="date" id="start-date" required>
+            </div>
+            <div class="form-group">
+                <label for="end-date">结束日期</label>
+                <input type="date" id="end-date" required>
+            </div>
+            <button type="submit">提交</button>
+        </form>
+    </div>
+
+    <script>
+        // 全局变量
+        let currentEmployees = [];
+        let currentVacations = [];
+        let currentRequests = [];
+
+        // DOM 加载完成后初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            initTabs();
+            loadEmployees();
+            loadVacations();
+            loadRequests();
+            setupForms();
+        });
+
+        // 初始化标签页
+        function initTabs() {
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.addEventListener('click', () => {
+                    // 移除所有活动状态
+                    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                    // 设置当前活动状态
+                    tab.classList.add('active');
+                    const tabId = tab.getAttribute('data-tab');
+                    document.getElementById(tabId).classList.add('active');
+                });
+            });
+        }
+
+        // 加载员工数据
+        async function loadEmployees() {
+            try {
+                const response = await fetch('/api/employees');
+                currentEmployees = await response.json();
+                renderEmployeesTable();
+                updateEmployeeSelects();
+            } catch (error) {
+                console.error('加载员工失败:', error);
+            }
+        }
+
+        // 渲染员工表格
+        function renderEmployeesTable() {
+            const tbody = document.querySelector('#employees-table tbody');
+            tbody.innerHTML = '';
+            currentEmployees.forEach(employee => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${employee.id}</td>
+                    <td>${employee.name}</td>
+                    <td>${employee.level}</td>
+                    <td>${employee.totalVacationDays}</td>
+                    <td>${employee.vacationDaysLeft}</td>
+                    <td class="actions">
+                        <button onclick="editEmployee(${employee.id})">编辑</button>
+                        <button onclick="deleteEmployee(${employee.id})">删除</button>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        // 更新员工选择框
+        function updateEmployeeSelects() {
+            const selects = [
+                document.getElementById('add-vacation-employee'),
+                document.getElementById('vacation-employee'),
+                document.getElementById('request-employee')
+            ];
+            selects.forEach(select => {
+                select.innerHTML = '';
+                currentEmployees.forEach(employee => {
+                    const option = document.createElement('option');
+                    option.value = employee.id;
+                    option.textContent = employee.name;
+                    select.appendChild(option);
+                });
+            });
+        }
+
+        // 加载假期数据
+        async function loadVacations() {
+            try {
+                const response = await fetch('/api/vacations');
+                currentVacations = await response.json();
+                renderVacationsTable();
+                updateRequestTypeSelect();
+            } catch (error) {
+                console.error('加载假期失败:', error);
+            }
+        }
+
+        // 渲染假期表格
+        function renderVacationsTable() {
+            const tbody = document.querySelector('#vacations-table tbody');
+            tbody.innerHTML = '';
+            currentVacations.forEach(vacation => {
+                const employee = currentEmployees.find(e => e.id === vacation.employeeId) || { name: '未知' };
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${vacation.id}</td>
+                    <td>${employee.name}</td>
+                    <td>${vacation.type}</td>
+                    <td>${vacation.totalDays}</td>
+                    <td>${vacation.useDays}</td>
+                    <td class="status-${vacation.status}">${vacation.status}</td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        // 更新申请类型选择框
+        function updateRequestTypeSelect() {
+            const select = document.getElementById('request-type');
+            select.innerHTML = '';
+            // 获取选中的员工ID
+            const employeeId = document.getElementById('request-employee').value;
+            // 筛选该员工的假期类型
+            const employeeVacations = currentVacations.filter(v => v.employeeId == employeeId);
+            employeeVacations.forEach(vacation => {
+                const option = document.createElement('option');
+                option.value = vacation.type;
+                option.textContent = vacation.type;
+                select.appendChild(option);
+            });
+
+            // 当选择不同员工时更新假期类型
+            document.getElementById('request-employee').addEventListener('change', updateRequestTypeSelect);
+        }
+
+        // 加载申请数据
+        async function loadRequests() {
+            try {
+                const response = await fetch('/api/vacation-requests');
+                currentRequests = await response.json();
+                renderRequestsTable();
+            } catch (error) {
+                console.error('加载申请失败:', error);
+            }
+        }
+
+        // 渲染申请表格
+        function renderRequestsTable() {
+            const tbody = document.querySelector('#requests-table tbody');
+            tbody.innerHTML = '';
+            currentRequests.forEach(request => {
+                const employee = currentEmployees.find(e => e.id === request.employeeId) || { name: '未知' };
+                const row = document.createElement('tr');
+                let actions = '';
+                if (request.status === 'pending') {
+                    actions = `
+                        <button onclick="approveRequest(${request.id})">批准</button>
+                        <button onclick="rejectRequest(${request.id})">拒绝</button>
+                    `;
+                }
+                row.innerHTML = `
+                    <td>${request.id}</td>
+                    <td>${employee.name}</td>
+                    <td>${request.type}</td>
+                    <td>${request.startDate}</td>
+                    <td>${request.endDate}</td>
+                    <td class="status-${request.status}">${request.status}</td>
+                    <td class="actions">${actions}</td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        // 设置表单提交事件
+        function setupForms() {
+            // 员工表单
+            document.getElementById('employee-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const id = document.getElementById('employee-id').value;
+                const employee = {
+                    name: document.getElementById('employee-name').value,
+                    level: parseInt(document.getElementById('employee-level').value)
+                };
+
+                try {
+                    if (id) {
+                        // 更新员工
+                        employee.id = parseInt(id);
+                        await fetch(`/api/employees/${id}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(employee)
+                        });
+                    } else {
+                        // 添加员工
+                        await fetch('/api/employees', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(employee)
+                        });
+                    }
+                    // 重置表单并重新加载数据
+                    document.getElementById('employee-form').reset();
+                    document.getElementById('employee-id').value = '';
+                    loadEmployees();
+                } catch (error) {
+                    console.error('保存员工失败:', error);
+                }
+            });
+
+            // 取消员工编辑
+            document.getElementById('cancel-employee').addEventListener('click', () => {
+                document.getElementById('employee-form').reset();
+                document.getElementById('employee-id').value = '';
+            });
+
+            // 添加假期表单
+            document.getElementById('add-vacation-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const employeeId = document.getElementById('add-vacation-employee').value;
+                const days = parseInt(document.getElementById('vacation-days').value);
+
+                try {
+                    await fetch(`/api/employees/${employeeId}/vacation?days=${days}`, {
+                        method: 'POST'
+                    });
+                    // 重置表单并重新加载数据
+                    document.getElementById('add-vacation-form').reset();
+                    loadEmployees();
+                } catch (error) {
+                    console.error('添加假期失败:', error);
+                }
+            });
+
+            // 假期类型表单
+            document.getElementById('vacation-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const vacation = {
+                    employeeId: parseInt(document.getElementById('vacation-employee').value),
+                    type: document.getElementById('vacation-type').value,
+                    totalDays: parseInt(document.getElementById('total-days').value)
+                };
+
+                try {
+                    await fetch('/api/vacations', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(vacation)
+                    });
+                    // 重置表单并重新加载数据
+                    document.getElementById('vacation-form').reset();
+                    loadVacations();
+                } catch (error) {
+                    console.error('添加假期类型失败:', error);
+                }
+            });
+
+            // 假期申请表单
+            document.getElementById('request-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const request = {
+                    employeeId: parseInt(document.getElementById('request-employee').value),
+                    type: document.getElementById('request-type').value,
+                    startDate: document.getElementById('start-date').value,
+                    endDate: document.getElementById('end-date').value
+                };
+
+                try {
+                    await fetch('/api/vacation-requests', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(request)
+                    });
+                    // 重置表单并重新加载数据
+                    document.getElementById('request-form').reset();
+                    loadRequests();
+                } catch (error) {
+                    console.error('提交假期申请失败:', error);
+                }
+            });
+        }
+
+        // 编辑员工
+        window.editEmployee = async function(id) {
+            const employee = currentEmployees.find(e => e.id === id);
+            if (employee) {
+                document.getElementById('employee-id').value = employee.id;
+                document.getElementById('employee-name').value = employee.name;
+                document.getElementById('employee-level').value = employee.level;
+            }
+        }
+
+        // 删除员工
+        window.deleteEmployee = async function(id) {
+            if (confirm('确定要删除此员工吗？')) {
+                try {
+                    await fetch(`/api/employees/${id}`, {
+                        method: 'DELETE'
+                    });
+                    loadEmployees();
+                    loadVacations();
+                    loadRequests();
+                } catch (error) {
+                    console.error('删除员工失败:', error);
+                }
+            }
+        }
+
+        // 批准申请
+        window.approveRequest = async function(id) {
+            try {
+                await fetch(`/api/vacation-requests/${id}/process?approved=true`, {
+                    method: 'PUT'
+                });
+                loadRequests();
+                loadVacations();
+                loadEmployees();
+            } catch (error) {
+                console.error('批准申请失败:', error);
+            }
+        }
+
+        // 拒绝申请
+        window.rejectRequest = async function(id) {
+            try {
+                await fetch(`/api/vacation-requests/${id}/process?approved=false`, {
+                    method: 'PUT'
+                });
+                loadRequests();
+            } catch (error) {
+                console.error('拒绝申请失败:', error);
+            }
+        }
+    </script>
+</body>
+</html>
